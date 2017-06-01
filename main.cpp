@@ -22,10 +22,11 @@ void drawKeypointCircle ( // Отрисовка особых точек цвет
                         );
 void drawMatchesLines ( // Отрисовка особых точек
                         Mat& image, //Изображение 1
+
                         vector<KeyPoint>& kps1, //Вектор особых точек изображения 1
                         vector<KeyPoint>& kps2, //Вектор особых точек изображения 2
                         Scalar kps1_color = Scalar(255, 0 , 0), //Цвет особых точек изображения 1
-                        Scalar kps2_color = Scalar(0, 255 , 0), //Цвет особых точек изображения 2
+                        Scalar kps2_color = Scalar(255, 255 , 0), //Цвет особых точек изображения 2
                         Scalar lines_color = Scalar(0, 0 , 255) //Цвет соединительных линий
                         );
 bool selectDetector ( Ptr<Feature2D>& detector_obj,
@@ -40,6 +41,7 @@ const string keys =
 
 int main(int argc, char *argv[])
 {
+    cout << getBuildInformation() << endl;
     /** Parsing input **/  
     cv::CommandLineParser parser(argc, argv, keys);
     if (parser.has("help"))
@@ -68,7 +70,7 @@ int main(int argc, char *argv[])
 
 
     /** Objects creation **/
-    namedWindow( "output stream", WINDOW_AUTOSIZE); //Создание окна
+    namedWindow( "output stream", WINDOW_FULLSCREEN); //Создание окна
 
     string detectorName = parser.get<string>("detector");
     cout << "Try to init " << detectorName << "... "<< endl;
@@ -88,38 +90,58 @@ int main(int argc, char *argv[])
     Ptr<DescriptorMatcher> matcher;
     matcher = DescriptorMatcher::create("BruteForce");
     vector < vector< DMatch > > matches;
-    vector <DMatch> single_matches;
+   // vector <DMatch> single_matches;
 
     srcVideo.read(previous_frame);
     detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
+    im_fused = previous_frame.clone();
+    int counter = 0;
     while (srcVideo.read(current_frame))
     {
         detector->detectAndCompute(current_frame,Mat(),curr_kps, curr_dscs);
-        detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
+        //detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
 
         matcher->radiusMatch(prev_dscs, curr_dscs, matches, 300);
+        cout << "Number of descriptors: " << curr_kps.size() << "   " << prev_kps.size() << endl;
+
         for( size_t i = 0; i < matches.size(); i++ )
         {
             if (!matches[i].empty())
             {
                 DMatch tempDM = matches[i].front();
-                single_matches.push_back(tempDM);
-                prev_kps_matched.push_back( prev_kps[ tempDM.queryIdx ] );
-                curr_kps_matched.push_back( curr_kps[ tempDM.trainIdx ] );
+               // single_matches.push_back(tempDM);
+                if (tempDM.distance<250)
+                {
+                    prev_kps_matched.push_back( prev_kps[ tempDM.queryIdx ] );
+                    curr_kps_matched.push_back( curr_kps[ tempDM.trainIdx ] );
+                }
             }
 
         }
-        drawMatchesLines (im_fused,curr_kps_matched,prev_kps_matched );
-        frameQuery.push_back(im_result);
+
+
+        cout << "Matches: " << curr_kps_matched.size() << endl;
+        //frameQuery.push_back(im_result);
         //////// Добавить функцию сглаживания последовательности
-        addWeighted(current_frame , 0.5, previous_frame, 0.5, 0.0, im_result);
+        addWeighted(im_fused , 0.5, current_frame, 0.5, 0.0, im_fused);
+        drawMatchesLines (im_fused,curr_kps_matched,prev_kps_matched );
 
-        imshow( "output stream", im_result );
+        imshow( "output stream", im_fused);
 
-        previous_frame = current_frame;
-        //prev_kps = curr_dscs; prev_dscs = curr_dscs;
+        /*if (counter++ >= 10)
+        {
+            previous_frame = current_frame.clone();
+            counter=0;
+        }*/
+        previous_frame = current_frame.clone();
+        prev_kps.clear(); prev_kps = curr_kps; prev_dscs = curr_dscs.clone();
+        curr_kps.clear();
+        prev_kps_matched.clear();
+        curr_kps_matched.clear();
 
-        if ( cvWaitKey(1)  == 27 )  break;
+        //int key = cvWaitKey(33);
+        //cout << "Pressed key: "<< key << endl;
+        if ( cvWaitKey(1)  == 27 )  break; //27 for windows
     }
 /*
     vector<KeyPoint> im1_kps, im2_kps, im1_kps_matched, im2_kps_matched;
