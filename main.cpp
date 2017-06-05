@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
         cout << "Matches: " << curr_kps_matched.size() << endl;
         //frameQuery.push_back(im_result);
         //////// Добавить функцию сглаживания последовательности
-        addWeighted(im_fused , 0.5, current_frame, 0.5, 0.0, im_fused);
+        addWeighted(im_fused , 0.9, current_frame, 0.1, 0.0, im_fused);
         drawMatchesLines (im_fused,curr_kps_matched,prev_kps_matched );
 
         imshow( "output stream", im_fused);
