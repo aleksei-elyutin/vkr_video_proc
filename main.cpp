@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     Mat current_frame, previous_frame, im_result, im_fused;
     vector<KeyPoint>  prev_kps, curr_kps, prev_kps_matched, curr_kps_matched;
     Mat prev_dscs, curr_dscs;
-    deque <Mat> frameQuery;
+
 
     Ptr<DescriptorMatcher> matcher;
     matcher = DescriptorMatcher::create("BruteForce");
