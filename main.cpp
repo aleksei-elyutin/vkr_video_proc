@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
         detector->detectAndCompute(current_frame,Mat(),curr_kps, curr_dscs);
         //detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
 
-        matcher->radiusMatch(prev_dscs, curr_dscs, matches, 300);
+        matcher->radiusMatch(prev_dscs, curr_dscs, matches, 200);
         cout << "Number of descriptors: " << curr_kps.size() << "   " << prev_kps.size() << endl;
 
         for( size_t i = 0; i < matches.size(); i++ )
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
             {
                 DMatch tempDM = matches[i].front();
                // single_matches.push_back(tempDM);
-                if (tempDM.distance<250)
+                if (tempDM.distance<50)
                 {
                     prev_kps_matched.push_back( prev_kps[ tempDM.queryIdx ] );
                     curr_kps_matched.push_back( curr_kps[ tempDM.trainIdx ] );
