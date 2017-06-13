@@ -9,6 +9,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
+#include <opencv2/calib3d.hpp>
 
 using namespace std;
 using namespace cv;
@@ -32,6 +33,9 @@ void drawMatchesLines ( // Отрисовка особых точек
 bool selectDetector ( Ptr<Feature2D>& detector_obj,
                       string& detectorName
                     );
+
+int addImFromMask (Mat& input_image1, Mat& input_image2, Mat& output_image, Mat& mask);
+
     /*************************/
 const string keys =
     "{help h usage ?  |      | print this message      } \
@@ -71,6 +75,8 @@ int main(int argc, char *argv[])
 
     /** Objects creation **/
     namedWindow( "output stream", WINDOW_FULLSCREEN); //Создание окна
+    namedWindow( "input stream", WINDOW_FULLSCREEN); //Создание окна
+    //namedWindow( "warped mask", WINDOW_FULLSCREEN); //Создание окна
 
     string detectorName = parser.get<string>("detector");
     cout << "Try to init " << detectorName << "... "<< endl;
@@ -82,114 +88,81 @@ int main(int argc, char *argv[])
         cout << detectorName << " - OK." << endl;
     }
 
-    Mat current_frame, previous_frame, im_result, im_fused;
+    Mat current_frame, previous_frame, im_warped, im_fused, im_marked;
     vector<KeyPoint>  prev_kps, curr_kps, prev_kps_matched, curr_kps_matched;
-    Mat prev_dscs, curr_dscs;
+    Mat prev_dscs, curr_dscs, mask;
+    vector <Point2f> current_frame_pts, previous_frame_pts;
 
 
-    Ptr<DescriptorMatcher> matcher;
-    matcher = DescriptorMatcher::create("BruteForce");
-    vector < vector< DMatch > > matches;
-   // vector <DMatch> single_matches;
+    FlannBasedMatcher matcher;
+    //Ptr<DescriptorMatcher> matcher;
+    //matcher = FlannBasedMatcher::create();
+   // vector < vector< DMatch > > matches;
+    vector <DMatch> matches;
+    //vector <DMatch> single_matches;
 
     srcVideo.read(previous_frame);
     detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
     im_fused = previous_frame.clone();
-    int counter = 0;
+
     while (srcVideo.read(current_frame))
     {
         detector->detectAndCompute(current_frame,Mat(),curr_kps, curr_dscs);
-        //detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
+        detector->detectAndCompute(previous_frame, Mat(), prev_kps, prev_dscs);
 
-        matcher->radiusMatch(prev_dscs, curr_dscs, matches, 200);
-        cout << "Number of descriptors: " << curr_kps.size() << "   " << prev_kps.size() << endl;
+        Mat immask = Mat::zeros(Size(current_frame.cols, current_frame.rows),current_frame.type());
+        Mat warped_immask;
 
-        for( size_t i = 0; i < matches.size(); i++ )
+        matcher.match(prev_dscs, curr_dscs, matches);
+        //>radiusMatch
+        //cout << "Number of descriptors: " << curr_kps.size() << "   " << prev_kps.size() << endl;
+
+        size_t size = matches.size();
+        for( size_t i = 0; i < size; i++ )
         {
-            if (!matches[i].empty())
-            {
-                DMatch tempDM = matches[i].front();
+               // DMatch tempDM = matches[i].front();
                // single_matches.push_back(tempDM);
-                if (tempDM.distance<50)
+                if (matches[i].distance<100)
                 {
-                    prev_kps_matched.push_back( prev_kps[ tempDM.queryIdx ] );
-                    curr_kps_matched.push_back( curr_kps[ tempDM.trainIdx ] );
+                   // prev_kps_matched.push_back( prev_kps[ tempDM.queryIdx ] );
+                   // curr_kps_matched.push_back( curr_kps[ tempDM.trainIdx ] );
+                    previous_frame_pts.push_back( prev_kps[ matches[i].queryIdx ].pt );
+                    current_frame_pts.push_back( curr_kps[ matches[i].trainIdx ].pt);
                 }
-            }
 
         }
-
-
-        cout << "Matches: " << curr_kps_matched.size() << endl;
+        Mat H = estimateAffinePartial2D(current_frame_pts,previous_frame_pts, mask, RANSAC);
+        warpAffine(current_frame, im_warped, H, Size(current_frame.cols, current_frame.rows),INTER_LINEAR, BORDER_CONSTANT, Scalar(255,255,255));
+        warpAffine(immask, warped_immask , H , Size(current_frame.cols, current_frame.rows),INTER_LINEAR, BORDER_CONSTANT, Scalar(255,255,255));
+        addImFromMask (im_warped, previous_frame, im_fused, warped_immask);
+        //cout << "Matches: " << curr_kps_matched.size() << endl;
         //frameQuery.push_back(im_result);
         //////// Добавить функцию сглаживания последовательности
-        addWeighted(im_fused , 0.9, current_frame, 0.1, 0.0, im_fused);
-        drawMatchesLines (im_fused,curr_kps_matched,prev_kps_matched );
+        //addWeighted(im_fused , 0.9, warped_immask, 0.1, 0, im_marked);
+       //drawMatchesLines (im_fused,curr_kps_matched,prev_kps_matched );
 
+       // imshow( "output stream", im_fused);
+        imshow( "input stream", current_frame);
         imshow( "output stream", im_fused);
+        //imshow( "warped mask", warped_immask);
 
         /*if (counter++ >= 10)
         {
             previous_frame = current_frame.clone();
             counter=0;
         }*/
-        previous_frame = current_frame.clone();
-        prev_kps.clear(); prev_kps = curr_kps; prev_dscs = curr_dscs.clone();
+        previous_frame = im_fused.clone();
+        prev_kps.clear(); //prev_kps = curr_kps; prev_dscs = curr_dscs.clone();
         curr_kps.clear();
         prev_kps_matched.clear();
         curr_kps_matched.clear();
+        previous_frame_pts.clear();
+        current_frame_pts.clear();
 
         //int key = cvWaitKey(33);
         //cout << "Pressed key: "<< key << endl;
         if ( cvWaitKey(1)  == 27 )  break; //27 for windows
     }
-/*
-    vector<KeyPoint> im1_kps, im2_kps, im1_kps_matched, im2_kps_matched;
-    Mat im1_dsc, im2_dsc;
 
-    double timestamp1, timestamp2;  //Временные метки ***
-    timestamp1   = (double)getTickCount();
-    detector->detectAndCompute( img1, Mat(), im1_kps, im1_dsc);
-    timestamp2 = (double)getTickCount();
-    cout << "Time for detection and compution of frame 1: " << (timestamp2-timestamp1)/getTickFrequency() << endl;
-    cout << "Number of features for image 1: " << im1_kps.size() << endl;
-    timestamp1   = (double)getTickCount();
-    detecto->detectAndCompute( img2, Mat(), im2_kps, im2_dsc);
-    timestamp2 = (double)getTickCount();
-    cout << "Time for detection and compution of frame 2: " << (timestamp2-timestamp1)/getTickFrequency() << endl;
-    cout << "Number of features for image 2: " << im2_kps.size() << endl;
-
-    Ptr<DescriptorMatcher> matcher;
-    matcher = DescriptorMatcher::create("BruteForce");
-    vector < vector< DMatch > > matches;
-    vector <DMatch> single_matches;
-    matcher->radiusMatch(im1_dsc, im2_dsc, matches, 400);
-
-    for( size_t i = 0; i < matches.size(); i++ )
-    {
-        if (!matches[i].empty())
-        {
-            DMatch tempDM = matches[i].front();
-            single_matches.push_back(tempDM);
-            im1_kps_matched.push_back( im1_kps[ tempDM.queryIdx ] );
-            im2_kps_matched.push_back( im2_kps[ tempDM.trainIdx ] );
-        }
-
-    }
-     cout << "Number of matched features: " << im1_kps_matched.size() << endl;
-
-
-    Mat im_result;// = img1.clone();
-
-    drawKeypointCircle(im_result, im1_kps_matched, Scalar(0, 255 , 0));
-    drawKeypointCircle(im_result, im2_kps_matched, Scalar(255, 0 , 0));
-
-    addWeighted(img1 , 0.5, img2, 0.5, 0.0, im_result);
-    drawMatchesLines (im_result,im1_kps_matched,im2_kps_matched );
-    imshow( "image1", im_result );
-    cvWaitKey();
-    //imshow( "image1", img2 );
-    //cvWaitKey();
-    */
     return 0;
 }

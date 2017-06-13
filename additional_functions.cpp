@@ -109,3 +109,33 @@ bool selectDetector ( Ptr<Feature2D>& detector_obj,
     }
 }
 
+int addImFromMask (Mat& input_image1, Mat& input_image2, Mat& output_image, Mat& mask)
+{
+   if ( (input_image1.rows != input_image2.rows) || (input_image1.rows != mask.rows) || (input_image2.rows != mask.rows) ||
+        (input_image1.cols != input_image2.cols) || (input_image1.rows != mask.rows) || (input_image2.rows != mask.rows) )
+   {
+       cout << "addImFromMask: Arrays must be same lengths" << endl;
+       return -1;
+   }
+   if (input_image1.type()!=input_image2.type())
+   {
+       cout << "addImFromMaks: Arrays must the same type" << endl;
+       cout << input_image1.type() << " != " << input_image2.type() << endl;
+       return -1;
+   }
+   output_image = input_image1.clone();
+
+    int rows = mask.rows, cols =  mask.cols;
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            if (mask.at<Vec3b>(i,j)[0]&mask.at<Vec3b>(i,j)[1]&mask.at<Vec3b>(i,j)[2]) {
+                {
+                        output_image.at<Vec3b>(i,j)[0]= input_image2.at<Vec3b>(i,j)[0];
+                        output_image.at<Vec3b>(i,j)[1]= input_image2.at<Vec3b>(i,j)[1];
+                        output_image.at<Vec3b>(i,j)[2]= input_image2.at<Vec3b>(i,j)[2];
+                }
+            }
+        }
+    }
+    return 1;
+}
